@@ -54,10 +54,10 @@ update_task(){
                 TASK_FILE_UPDATED2_CONTENT=$(echo -E ${TASK_FILE_UPDATED_CONTENT} | jq '.status = "done"')  
                 echo -E "${TASK_FILE_UPDATED2_CONTENT}" > ${TASK}
                 rm -f ${LOG}
+                PROGRESSING=false
             else
                 echo "Unknow - ${CURRENT_STATS}"
             fi
-            PROGRESSING=false
         fi    
         sleep 10 
     done
