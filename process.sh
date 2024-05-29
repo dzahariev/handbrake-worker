@@ -1,85 +1,156 @@
 #! /bin/bash
-TASKS="/tasks"
-INPUT="/input"
-OUTPUT="/output"
-KIND="handbrake"
+TASKS_LOCATION="/tasks"
+INPUT_LOCATION="/input"
+OUTPUT_LOCATION="/output"
+TASKS_KIND="handbrake"
 
-# Look in soecified folder for tasks that are of predefined kind and are not done 
 get_next_task(){
-    local TASKS_FOLDER_NAME=${1}
-    local TASKS_KIND=${2}
-    
-    for FULL_FILE_NAME in "${TASKS_FOLDER_NAME}"/*; do
-        FILE_NAME="$(basename "$FULL_FILE_NAME")"
-        EXTENSION="${FILE_NAME##*.}"
-        if  [[ "${EXTENSION}" == "json" ]]; then
-            CT_KIND=$(cat ${FULL_FILE_NAME} | jq -r .kind)
-            STATUS=$(cat ${FULL_FILE_NAME} | jq -r .status)
-            if  [[ "${CT_KIND}" == "${TASKS_KIND}" ]]; then
-                if  [[ ! "${STATUS}" == "done" ]]; then
-                    echo "${FULL_FILE_NAME}"
+    local tasksfolder=${1}
+    local taskskind=${2}
+
+    for filenamewithpath in "${tasksfolder}"/*; do
+        filename="$(basename "$filenamewithpath")"
+        extension="${filename##*.}"
+        if  [[ "${extension}" == "json" ]]; then
+            taskkind=$(cat ${filenamewithpath} | jq -r .kind)
+            taskstatus=$(cat ${filenamewithpath} | jq -r .status)
+            if  [[ "${taskkind}" == "${taskskind}" ]]; then
+                if  [[ ! "${taskstatus}" == "done" ]]; then
+                    echo "${filenamewithpath}"
                 fi
             fi
         fi
     done
 }
 
-update_task(){
-    local TASK=${1}
-    local LOG=${2}
-    sleep 10 
+is_valid_json(){
+    [[ $(echo ${1} | jq -e . &>/dev/null; echo $?) -eq 0 ]] && echo "true" || echo "false"
+}
 
-    PROGRESSING=true
-    while ${PROGRESSING} 
-    do
-        CURRENT_STATS=$(tail -17 ${LOG})
-        if  [[ ${CURRENT_STATS} = Progress* ]] ; then
-            JSON_STATS=$(echo ${CURRENT_STATS} | cut -d ' ' -f 2- )
-            PROGRESS=$(echo ${JSON_STATS} | jq -r .Working.Progress)
-            HR_PROGRESS=$(echo ${PROGRESS} | bc -l | xargs printf "%.2f")
-            PROGRESS_PRECENT=$( bc -l <<<"100*${HR_PROGRESS}" )
-            HR_PROGRESS_PRECENT=$(echo ${PROGRESS_PRECENT} | bc -l | xargs printf "%.0f")
-            TASK_CONTENT=$(cat ${TASK}) 
-            TASK_FILE_UPDATED_CONTENT=$(echo -E ${TASK_CONTENT} | jq --arg vprogress ${HR_PROGRESS_PRECENT} '.progress = $vprogress') 
-            TASK_FILE_UPDATED2_CONTENT=$(echo -E ${TASK_FILE_UPDATED_CONTENT} | jq '.status = "working"')  
-            echo -E "${TASK_FILE_UPDATED2_CONTENT}" > ${TASK}
+get_conversion_status(){
+    local reportjson=${1}
+
+    state="$(echo ${reportjson} | jq -r '.State')"
+    if  [[ $state == "WORKDONE" ]]; then
+        echo "done"
+    else 
+        if  [[ $state == "WORKING" ]]; then
+            echo "working"
         else
-            CURRENT_STATS=$(tail -8 ${LOG})
-            if  [[ ${CURRENT_STATS} = Progress* ]] ; then
-                JSON_STATS=$(echo ${CURRENT_STATS} | cut -d ' ' -f 2- )
-                STATE=$(echo ${JSON_STATS} | jq -r .State)
+            echo "unknown"
+        fi
+    fi
+}
 
-                TASK_CONTENT=$(cat $TASK) 
-                TASK_FILE_UPDATED_CONTENT=$(echo -E ${TASK_CONTENT} | jq '.progress = "100"')  
-                TASK_FILE_UPDATED2_CONTENT=$(echo -E ${TASK_FILE_UPDATED_CONTENT} | jq '.status = "done"')  
-                echo -E "${TASK_FILE_UPDATED2_CONTENT}" > ${TASK}
-                rm -f ${LOG}
-                PROGRESSING=false
-            else
-                echo "Unknow - ${CURRENT_STATS}"
+get_conversion_progress(){
+    local reportjson=${1}
+
+    state="$(echo ${reportjson} | jq -r '.State')"
+    if  [[ $state == "WORKDONE" ]]; then
+        echo "100"
+    else 
+        if  [[ $state == "WORKING" ]]; then
+            progressraw=$(echo ${1} | jq -r .Working.Progress)
+            progressfloat=$(echo ${progressraw} | bc -l | xargs printf "%.2f")
+            progressprcfloat=$( bc -l <<<"100*${progressfloat}" )
+            progress_int=$(echo ${progressprcfloat} | bc -l | xargs printf "%.0f")
+            echo "$progress_int"
+        else
+            echo "0"
+        fi
+    fi
+}
+
+update_task(){
+    local taskfilename=${1}
+    local taskstatus=${2}
+    local taskprogress=${3}
+
+    taskjson=$(cat ${taskfilename}) 
+    taskjsonupdstatus=$(echo -E $taskjson | jq --arg vstatus $taskstatus '.status = $vstatus') 
+    taskjsonupd=$(echo -E $taskjsonupdstatus | jq --arg vprogress $taskprogress '.progress = $vprogress') 
+    echo -E "$taskjsonupd" > $taskfilename
+}
+
+process_exists(){
+    pgrep -x ${1} >/dev/null && echo "true" || echo "false"
+}
+
+monitor_task(){
+    local taskfilename=${1}
+    local logfilename=${2}
+
+    sleep 10 
+    progressing=true
+    while $progressing 
+    do
+        str=$(tail -40 $logfilename)
+        delimiter="Progress: "
+        array=()
+        while [ "$str" ]; do
+            substring="${str%%"$delimiter"*}" 
+            [ -z "$substring" ] && str="${str#"$delimiter"}" && continue
+            array+=( "$substring" )
+            str="${str:${#substring}}"
+            [ "$str" == "$delimiter" ] && break
+        done
+        declare -p array 
+
+        lastreport=""
+        for line in "${array[@]}"
+        do
+            flatline=$(echo -n $line)
+            valid=$(is_valid_json  "$flatline")
+            if  [[ "$valid" == "true" ]]; then
+                lastreport=$flatline
             fi
-        fi    
+        done
+
+        conversionstatus=$(get_conversion_status "$lastreport")
+        conversionprogress=$(get_conversion_progress "$lastreport")
+
+        if  [[ $conversionstatus == "done" ]]; then
+            update_task $taskfilename $conversionstatus $conversionprogress 
+            rm -f $logfilename
+            progressing=false
+        else
+            if  [[ $conversionstatus == "working" ]]; then
+                update_task $taskfilename $conversionstatus $conversionprogress 
+            else
+                echo "Unknow: $lastreport"
+            fi
+        fi
+
         sleep 10 
+
+        handbrakeprocessexists=$(process_exists "HandBrakeCLI")
+        if  [[ $handbrakeprocessexists == "true" ]]; then
+            echo "Process HandBrakeCLI is started. Continue monitoring of the task."
+        else
+            echo "Process HandBrakeCLI is not started. Stoping monitoring of the task."
+            rm -f $logfilename
+            progressing=false
+        fi
     done
 }
 
-echo "Starting to watch the folder with tasks: ${TASKS}"
+echo "Starting to watch the folder with tasks: $TASKS_LOCATION"
 
 while true
 do
-    read -r FILE_TO_PROCESS <<< "$( get_next_task ${TASKS} ${KIND} )"
-    echo "Filename: ${FILE_TO_PROCESS}"
+    read -r TASK_TO_PROCESS <<< "$( get_next_task $TASKS_LOCATION $TASKS_KIND )"
 
-    if [ -e "${FILE_TO_PROCESS}" ]; then
-        SOURCE=$(cat ${FILE_TO_PROCESS} | jq -r .source)
-        ID=$(cat ${FILE_TO_PROCESS} | jq -r .id)
-        PRESET=$(cat ${FILE_TO_PROCESS} | jq -r .preset)
-        echo "Processing ${SOURCE} with preset ${PRESET} ..."
-        
-        HandBrakeCLI --preset-import-file /app/${PRESET}.json -Z ${PRESET} -i ${INPUT}/${SOURCE} -o ${OUTPUT}/${SOURCE%%.*}.mp4 --json > ${ID}_encoding.log &
-        update_task ${FILE_TO_PROCESS} ${ID}_encoding.log &
+    if [ -e "$TASK_TO_PROCESS" ]; then
+        ID=$(cat $TASK_TO_PROCESS | jq -r .id)
+        SOURCE=$(cat $TASK_TO_PROCESS | jq -r .source)
+        PRESET=$(cat $TASK_TO_PROCESS | jq -r .preset)
+        echo "Converting $SOURCE using preset $PRESET ..."
+        HandBrakeCLI --preset-import-file /app/$PRESET.json -Z $PRESET -i $INPUT_LOCATION/$SOURCE -o $OUTPUT_LOCATION/${SOURCE%.*}.mp4 --json > ${ID}_enc.log &
+        monitor_task $TASK_TO_PROCESS ${ID}_enc.log &
         wait
-    fi 
+    else
+        echo "There is no task for conversion in queue. Sleeping ..."
+    fi
 
     sleep 10
 done
