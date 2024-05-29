@@ -106,6 +106,7 @@ monitor_task(){
             fi
         done
 
+        handbrakeprocessexists=$(process_exists "HandBrakeCLI")
         conversionstatus=$(get_conversion_status "$lastreport")
         conversionprogress=$(get_conversion_progress "$lastreport")
 
@@ -121,9 +122,6 @@ monitor_task(){
             fi
         fi
 
-        sleep 10 
-
-        handbrakeprocessexists=$(process_exists "HandBrakeCLI")
         if  [[ $handbrakeprocessexists == "true" ]]; then
             echo "Process HandBrakeCLI is started. Continue monitoring of the task."
         else
@@ -131,6 +129,8 @@ monitor_task(){
             rm -f $logfilename
             progressing=false
         fi
+
+        sleep 10 
     done
 }
 
