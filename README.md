@@ -1,2 +1,2 @@
 # handbrake
-Handbrake task processor.
+Worker for Handbrake tasks.
