@@ -1,2 +1,2 @@
-# handbrake
+# handbrake-worker
 Worker for Handbrake tasks.
