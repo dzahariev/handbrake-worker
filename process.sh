@@ -145,7 +145,7 @@ do
         SOURCE=$(cat $TASK_TO_PROCESS | jq -r .source)
         PRESET=$(cat $TASK_TO_PROCESS | jq -r .preset)
         echo "Converting $SOURCE using preset $PRESET ..."
-        HandBrakeCLI --device=/dev/dri:/dev/dri --encoder vaapi_h264 --vaapi-device /dev/dri/renderD128 --preset-import-file /app/$PRESET.json -Z $PRESET -i $INPUT_LOCATION/$SOURCE -o $OUTPUT_LOCATION/${SOURCE%.*}.mp4 --json > ${ID}_enc.log &
+        HandBrakeCLI --encoder vaapi_h264 --vaapi-device /dev/dri/renderD128 --preset-import-file /app/$PRESET.json -Z $PRESET -i $INPUT_LOCATION/$SOURCE -o $OUTPUT_LOCATION/${SOURCE%.*}.mp4 --json > ${ID}_enc.log &
         monitor_task $TASK_TO_PROCESS ${ID}_enc.log &
         wait
     else
