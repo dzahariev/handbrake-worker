@@ -1,6 +1,7 @@
 FROM ubuntu:24.04
-RUN sed -i 's/^# deb/deb/' /etc/apt/sources.list && apt-get update 
-RUN apt install handbrake-cli i965-va-driver jq procps bc -y
+RUN apt-get update 
+
+RUN apt install handbrake-cli jq procps bc -y
 
 VOLUME [ "/tasks", "/input", "/output"]
 RUN mkdir app
