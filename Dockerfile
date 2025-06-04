@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 RUN apt-get update 
-RUN apt install handbrake-cli i965-va-driver jq procps bc -y
+RUN apt install handbrake-cli intel-media-va-driver-non-free i965-va-driver jq procps bc -y
 
 VOLUME [ "/tasks", "/input", "/output"]
 RUN mkdir app
