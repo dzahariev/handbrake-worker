@@ -8,7 +8,8 @@
       ],
       "AudioEncoderFallback" : "ca_aac",
       "AudioLanguageList" : [
-
+        "bul",
+        "eng"
       ],
       "AudioList" : [
         {
