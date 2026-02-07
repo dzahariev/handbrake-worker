@@ -8,8 +8,7 @@
       ],
       "AudioEncoderFallback" : "ca_aac",
       "AudioLanguageList" : [
-        "bul",
-        "eng"
+        "any"
       ],
       "AudioList" : [
         {
@@ -28,7 +27,7 @@
       ],
       "AudioSecondaryEncoderMode" : true,
       "AudioTrackNamePassthru" : true,
-      "AudioTrackSelectionBehavior" : "first",
+      "AudioTrackSelectionBehavior" : "all",
       "ChapterMarkers" : false,
       "ChildrenArray" : [
 
